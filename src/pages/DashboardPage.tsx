@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import Card from '../components/UI/Card';
@@ -71,44 +71,121 @@ const DashboardPage: React.FC = () => {
         return;
       }
       
+      // Valider l'URL
+      let apiUrl: URL;
+      try {
+        apiUrl = new URL(settings.apiUrl);
+      } catch (urlError) {
+        throw new Error('L\'URL de l\'API n\'est pas valide. Vérifiez le format de l\'URL.');
+      }
+      
       // Appeler l'API
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       };
       
       if (settings.apiToken) {
-        headers['Authorization'] = `Bearer ${settings.apiToken}`;
+        // Support pour différents types d'authentification
+        if (settings.apiUrl.includes('kobotoolbox.org')) {
+          headers['Authorization'] = `Token ${settings.apiToken}`;
+        } else {
+          headers['Authorization'] = `Bearer ${settings.apiToken}`;
+        }
       }
       
-      const response = await fetch(settings.apiUrl, { headers });
+      // Configuration de la requête avec gestion CORS
+      const fetchOptions: RequestInit = {
+        method: 'GET',
+        headers,
+        mode: 'cors',
+        credentials: 'omit',
+      };
+      
+      const response = await fetch(settings.apiUrl, fetchOptions);
       
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        // Gérer les erreurs HTTP spécifiques
+        if (response.status === 404) {
+          throw new Error(`Endpoint non trouvé (404). Vérifiez que l'URL "${settings.apiUrl}" est correcte.`);
+        } else if (response.status === 401) {
+          throw new Error('Non autorisé (401). Vérifiez votre token d\'authentification.');
+        } else if (response.status === 403) {
+          throw new Error('Accès interdit (403). Vérifiez vos permissions.');
+        } else if (response.status >= 500) {
+          throw new Error(`Erreur serveur (${response.status}). Le serveur API rencontre des problèmes.`);
+        } else {
+          throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
+        }
       }
       
       // Vérifier le type de contenu de la réponse
       const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        throw new Error(`L'API ne retourne pas du JSON. Type de contenu reçu: ${contentType || 'non spécifié'}. Vérifiez que l'URL pointe vers un endpoint API valide.`);
+      
+      if (contentType && contentType.includes('text/html')) {
+        throw new Error(`L'URL semble pointer vers une page web (HTML) plutôt qu'un endpoint API. Vérifiez que l'URL "${settings.apiUrl}" est bien un endpoint API qui retourne du JSON.`);
+      }
+      
+      if (contentType && !contentType.includes('application/json') && !contentType.includes('text/plain')) {
+        throw new Error(`L'API ne retourne pas du JSON. Type de contenu reçu: ${contentType}. L'endpoint doit retourner du JSON (application/json).`);
       }
       
       let data;
       try {
         data = await response.json();
       } catch (jsonError) {
-        // Lire le début de la réponse pour diagnostic
-        const responseText = await response.clone().text();
-        const preview = responseText.substring(0, 100);
-        throw new Error(`La réponse de l'API n'est pas un JSON valide. Début de la réponse: "${preview}...". Vérifiez l'URL de votre API.`);
+        throw new Error('La réponse de l\'API n\'est pas un JSON valide. Vérifiez que l\'endpoint retourne du JSON correctement formaté.');
+      }
+      
+      // Valider que nous avons des données
+      if (data === null || data === undefined) {
+        throw new Error('L\'API a retourné des données vides.');
+      }
+      
+      // Convertir en tableau si ce n'est pas déjà le cas
+      let dataArray: any[];
+      if (Array.isArray(data)) {
+        dataArray = data;
+      } else if (typeof data === 'object' && data !== null) {
+        // Gestion spécifique pour KoBoToolbox
+        if (data.results && Array.isArray(data.results)) {
+          dataArray = data.results;
+        } else if (data.data && Array.isArray(data.data)) {
+          dataArray = data.data;
+        } else if (data.items && Array.isArray(data.items)) {
+          dataArray = data.items;
+        } else if (settings.apiUrl.includes('kobotoolbox.org') && settings.apiUrl.includes('/data/')) {
+          // Pour les données de formulaire KoBoToolbox, les données sont directement dans l'objet
+          dataArray = [data];
+        } else {
+          // Traiter l'objet comme un seul élément
+          dataArray = [data];
+        }
+      } else if (typeof data === 'object') {
+        dataArray = [data];
+      } else {
+        throw new Error('Format de données non supporté. L\'API doit retourner un objet JSON ou un tableau.');
+      }
+      
+      if (dataArray.length === 0) {
+        setMessage('Synchronisation réussie, mais aucune donnée n\'a été trouvée.');
+        setSyncing(false);
+        return;
       }
       
       // Stocker les données dans Firestore (simulation)
       // Dans une vraie app, vous stockeriez chaque élément séparément
-      await setDoc(doc(db, 'api_data', `sync_${Date.now()}`), {
-        data: Array.isArray(data) ? data.slice(0, 50) : [data], // Limiter à 50 éléments pour la demo
+      const limitedData = dataArray.slice(0, 100); // Limiter à 100 éléments pour éviter les problèmes de taille
+      
+      const docData = {
+        data: limitedData,
         createdAt: new Date(),
         userId: currentUser.uid,
-      });
+        source: settings.apiUrl,
+        recordCount: limitedData.length,
+        apiType: settings.apiUrl.includes('kobotoolbox.org') ? 'kobotoolbox' : 'generic',
+      };
+      
+      await setDoc(doc(db, 'api_data', `sync_${Date.now()}`), docData);
       
       // Mettre à jour la dernière synchronisation
       await setDoc(doc(db, 'user_settings', currentUser.uid), {
@@ -116,11 +193,23 @@ const DashboardPage: React.FC = () => {
         lastSync: new Date(),
       }, { merge: true });
       
-      setMessage('Synchronisation réussie !');
+      setMessage(`Synchronisation réussie ! ${limitedData.length} enregistrement${limitedData.length > 1 ? 's' : ''} synchronisé${limitedData.length > 1 ? 's' : ''}.`);
       loadStats();
     } catch (error) {
+      console.error('Erreur de synchronisation détaillée:', error);
       if (error instanceof Error) {
-        setMessage(`Erreur de synchronisation: ${error.message}`);
+        let errorMessage = error.message;
+        
+        // Messages d'erreur spécifiques pour les problèmes courants
+        if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Impossible de contacter l\'API. Vérifiez votre connexion internet et que l\'URL est correcte. Si vous utilisez KoBoToolbox, assurez-vous que votre token est valide.';
+        } else if (error.message.includes('CORS')) {
+          errorMessage = 'Problème CORS détecté. L\'API ne permet pas les requêtes depuis cette application web. Contactez l\'administrateur de l\'API.';
+        } else if (error.message.includes('NetworkError')) {
+          errorMessage = 'Erreur réseau. Vérifiez votre connexion internet et l\'URL de l\'API.';
+        }
+        
+        setMessage(`Erreur de synchronisation: ${errorMessage}`);
       } else {
         setMessage('Erreur de synchronisation inconnue');
       }
