@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, limit, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { KoBoService } from '../services/koboService';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import { RefreshCw, Database, Clock, TrendingUp } from 'lucide-react';
@@ -21,6 +22,8 @@ const DashboardPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+  const [syncStatus, setSyncStatus] = useState('');
   const { currentUser } = useAuth();
 
   useEffect(() => {
@@ -59,41 +62,61 @@ const DashboardPage: React.FC = () => {
     
     setSyncing(true);
     setMessage('');
+    setError('');
+    setSyncStatus('Démarrage de la synchronisation...');
     
     try {
-      const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
-      const targetUrl = 'https://kf.kobotoolbox.org/api/v2/assets/a7h7L7wxkDxgtn3wGPePAr/data.json';
-      const finalUrl = proxyUrl + encodeURIComponent(targetUrl);
-
-      // Requête simple sans headers d'authentification
-      const response = await fetch(finalUrl, {
-        method: 'GET',
-        mode: 'cors'
-      });
-
-      const data = await response.json();
-      console.log('Données récupérées:', data);
+      // Récupérer la configuration utilisateur
+      const settingsDoc = await getDoc(doc(db, 'user_settings', currentUser.uid));
+      const settings = settingsDoc.data();
       
-      // Convertir en tableau si ce n'est pas déjà le cas
+      if (!settings?.apiToken) {
+        throw new Error('Token KoBoToolbox manquant. Configurez vos paramètres d\'abord.');
+      }
+      
+      setSyncStatus('Connexion à KoBoToolbox...');
+      
+      // Utiliser l'Asset ID fixe pour les tests
+      const assetId = 'a7h7L7wxkDxgtn3wGPePAr';
+      console.log('🔍 Synchronisation KoboToolbox...');
+      console.log('📋 Asset ID:', assetId);
+      
+      const koboService = new KoBoService(settings.apiToken);
+      console.log('🌐 URL de base:', koboService.baseUrl);
+      
+      setSyncStatus('Récupération des données...');
+      const data = await koboService.getAssetData(assetId);
+      
+      console.log('✅ Synchronisation réussie, données reçues:', data);
+      console.log('📊 Nombre d\'éléments:', data?.length || 0);
+      
+      if (data && data.length > 0) {
+        console.log('📝 Premier élément:', data[0]);
+        console.log('🔑 Champs disponibles:', Object.keys(data[0] || {}));
+      }
+      
       let dataArray: any[] = Array.isArray(data) ? data : [data];
       
       if (dataArray.length === 0) {
-        setMessage('Synchronisation réussie, mais aucune donnée n\'a été trouvée.');
+        setMessage('Synchronisation réussie, mais aucune soumission n\'a été trouvée dans ce formulaire.');
         setSyncing(false);
+        setSyncStatus('');
         return;
       }
       
-      // Stocker les données dans Firestore (simulation)
-      // Dans une vraie app, vous stockeriez chaque élément séparément
+      setSyncStatus('Sauvegarde des données...');
+      
+      // Stocker les données dans Firestore
       const limitedData = dataArray.slice(0, 100); // Limiter à 100 éléments pour éviter les problèmes de taille
       
       const docData = {
         data: limitedData,
         createdAt: new Date(),
         userId: currentUser.uid,
-        source: targetUrl,
+        source: `KoBoToolbox Asset: ${assetId}`,
         recordCount: limitedData.length,
         apiType: 'kobotoolbox',
+        assetId: assetId,
       };
       
       await setDoc(doc(db, 'api_data', `sync_${Date.now()}`), docData);
@@ -104,14 +127,32 @@ const DashboardPage: React.FC = () => {
       }, { merge: true });
       
       setMessage(`Synchronisation réussie ! ${limitedData.length} enregistrement${limitedData.length > 1 ? 's' : ''} synchronisé${limitedData.length > 1 ? 's' : ''}.`);
+      setSyncStatus('');
       loadStats();
     } catch (error) {
       console.error('Erreur de synchronisation détaillée:', error);
-      setMessage(`Erreur de synchronisation: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
+      
+      let errorMessage = 'Erreur de synchronisation';
+      if (error.message.includes('Failed to fetch')) {
+        errorMessage = 'Impossible de contacter KoboToolbox (CORS/réseau)';
+      } else if (error.message.includes('HTTP 401')) {
+        errorMessage = 'Authentification requise - vérifiez vos paramètres';
+      } else if (error.message.includes('HTTP 404')) {
+        errorMessage = 'Asset non trouvé - vérifiez l\'ID de votre projet';
+      } else {
+        errorMessage = `Erreur: ${error.message}`;
+      }
+      
+      setError(errorMessage);
+      setSyncStatus('Échec de la synchronisation: ' + errorMessage);
     }
     
     setSyncing(false);
-    setTimeout(() => setMessage(''), 5000);
+    setTimeout(() => {
+      setMessage('');
+      setError('');
+      setSyncStatus('');
+    }, 5000);
   };
 
   if (loading) {
@@ -147,6 +188,18 @@ const DashboardPage: React.FC = () => {
           <p className={message.includes('Erreur') ? 'text-red-700' : 'text-green-700'}>
             {message}
           </p>
+        </Card>
+      )}
+
+      {error && (
+        <Card className="border-l-4 border-red-400 bg-red-50">
+          <p className="text-red-700">{error}</p>
+        </Card>
+      )}
+
+      {syncStatus && (
+        <Card className="border-l-4 border-blue-400 bg-blue-50">
+          <p className="text-blue-700">{syncStatus}</p>
         </Card>
       )}
 

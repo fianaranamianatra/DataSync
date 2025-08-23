@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
+import { KoBoService } from '../services/koboService';
 import Card from '../components/UI/Card';
 import Button from '../components/UI/Button';
 import { CheckCircle, XCircle, Wifi } from 'lucide-react';
@@ -60,59 +61,55 @@ const ConfigPage: React.FC = () => {
   };
 
   const testConnection = async () => {
-    if (!config.url) return;
+    if (!config.token.trim()) {
+      setMessage('Veuillez saisir votre token API KoboToolbox');
+      return;
+    }
     
     setTesting(true);
     setTestResult(null);
+    setMessage('');
     
     try {
-      const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
-      const targetUrl = 'https://kf.kobotoolbox.org/api/v2/assets/a7h7L7wxkDxgtn3wGPePAr/data.json';
-      const finalUrl = proxyUrl + encodeURIComponent(targetUrl);
-
-      // Requête simple sans headers d'authentification
-      const response = await fetch(finalUrl, {
-        method: 'GET',
-        mode: 'cors'
-      });
-
-      const data = await response.json();
-      console.log('Données récupérées:', data);
+      console.log('🔑 Test avec token:', config.token.substring(0, 10) + '...');
       
-      if (response.ok) {
-        setTestResult('success');
-        setMessage(`Connexion réussie ! ${Array.isArray(data) ? data.length : 'Plusieurs'} enregistrement(s) trouvé(s).`);
-      } else {
-        setTestResult('error');
-        if (response.status === 404) {
-          setMessage('Ressource non trouvée (404). Vérifiez l\'URL de votre API.');
-        } else if (response.status === 401) {
-          setMessage('Non autorisé (401). Vérifiez votre token d\'authentification.');
-        } else if (response.status === 403) {
-          setMessage('Accès interdit (403). Vérifiez vos permissions sur cette ressource.');
-        } else {
-          setMessage(`Erreur HTTP ${response.status}: ${response.statusText}`);
-        }
+      const koboService = new KoBoService(config.token);
+      
+      // Test avec l'Asset ID de test
+      const assetId = 'a7h7L7wxkDxgtn3wGPePAr';
+      console.log('📋 Asset ID:', assetId);
+      console.log('🌐 URL de base:', koboService.baseUrl);
+      
+      // Test 1: Vérifier la connexion générale
+      console.log('🧪 Test 1: Liste des assets...');
+      const assets = await koboService.getAssets();
+      console.log('✅ Connexion OK, assets trouvés:', assets.length);
+      
+      // Test 2: Vérifier l'asset spécifique
+      console.log('🧪 Test 2: Données de l\'asset...');
+      const data = await koboService.getAssetData(assetId);
+      console.log('✅ Asset OK, données trouvées:', data.length);
+      console.log('📊 Nombre d\'éléments:', data?.length || 0);
+      
+      if (data && data.length > 0) {
+        console.log('📝 Premier élément:', data[0]);
+        console.log('🔑 Champs disponibles:', Object.keys(data[0] || {}));
       }
+      
+      setTestResult('success');
+      setMessage(`Connexion réussie ! ${assets.length} projets trouvés, ${data.length} réponses dans l'asset`);
     } catch (error) {
-      console.error('Erreur de test de connexion:', error);
+      console.error('❌ Erreur détaillée:', error);
       setTestResult('error');
       
-      if (error instanceof Error) {
-        let errorMessage = error.message;
-        
-        // Messages d'erreur spécifiques
-        if (error.message.includes('Failed to fetch')) {
-          errorMessage = 'Impossible de contacter l\'API. Vérifiez l\'URL et votre connexion internet.';
-        } else if (error.message.includes('CORS')) {
-          errorMessage = 'Problème CORS. L\'API ne permet pas les requêtes depuis cette application.';
-        } else if (error.message.includes('NetworkError')) {
-          errorMessage = 'Erreur réseau. Vérifiez votre connexion internet.';
-        }
-        
-        setMessage(`Erreur de connexion: ${errorMessage}`);
+      if (error.message.includes('Token') || error.message.includes('401')) {
+        setMessage('❌ Token invalide. Vérifiez votre token API dans les paramètres KoboToolbox.');
+      } else if (error.message.includes('404')) {
+        setMessage('❌ Asset non trouvé. Vérifiez l\'ID de votre projet KoboToolbox.');
+      } else if (error.message.includes('CORS') || error.message.includes('fetch')) {
+        setMessage('❌ Problème de connexion réseau. Réessayez dans quelques instants.');
       } else {
-        setMessage('Erreur de connexion inconnue');
+        setMessage(`❌ Erreur: ${error.message}`);
       }
     }
     
@@ -120,7 +117,7 @@ const ConfigPage: React.FC = () => {
     setTimeout(() => {
       setTestResult(null);
       setMessage('');
-    }, 3000);
+    }, 5000);
   };
 
   return (
@@ -156,20 +153,29 @@ const ConfigPage: React.FC = () => {
             <label className="block text-sm font-medium text-[#2d3436] mb-2">
               Token d'authentification (optionnel)
             </label>
-            <div className="text-xs text-gray-500 mb-2">
-              <p className="mb-1">Format selon l'API :</p>
-              <ul className="list-disc list-inside space-y-1 ml-2">
-                <li>KoBoToolbox: Votre token API (sera automatiquement formaté)</li>
-                <li>Autres APIs: Token Bearer standard</li>
-              </ul>
+            
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="font-semibold text-blue-800 mb-2">🔐 Comment obtenir votre Token API KoboToolbox :</h3>
+              <ol className="list-decimal ml-4 text-sm text-blue-700 space-y-1">
+                <li>Connectez-vous sur <a href="https://kf.kobotoolbox.org" target="_blank" className="underline">kf.kobotoolbox.org</a></li>
+                <li>Cliquez sur votre profil (en haut à droite)</li>
+                <li>Allez dans <strong>"Account Settings"</strong></li>
+                <li>Cherchez la section <strong>"API Token"</strong></li>
+                <li>Copiez le token et collez-le ci-dessous</li>
+              </ol>
             </div>
+            
             <input
               type="password"
               value={config.token}
               onChange={(e) => setConfig({ ...config, token: e.target.value })}
-              placeholder="Votre token API"
+              placeholder="Collez votre token API ici..."
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#c5dfb3] focus:border-transparent"
+              required
             />
+            {!config.token && (
+              <p className="text-sm text-red-600 mt-1">⚠️ Le token API est obligatoire pour accéder aux données</p>
+            )}
           </div>
 
           {/* Aide spécifique pour KoBoToolbox */}
@@ -209,7 +215,7 @@ const ConfigPage: React.FC = () => {
               onClick={testConnection}
               variant="secondary"
               loading={testing}
-              disabled={!config.url}
+              disabled={!config.token}
               className="flex items-center space-x-2"
             >
               <Wifi size={20} />

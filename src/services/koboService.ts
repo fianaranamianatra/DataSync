@@ -38,14 +38,19 @@ export class KoBoService {
     };
   }
 
-  private async makeRequest<T>(url: string): Promise<T> {
+  private async makeRequest(endpoint: string): Promise<Response> {
+    const url = this.baseUrl + endpoint;
+    console.log('🌐 Tentative de connexion à:', url);
+    
     const response = await fetch(url, {
       method: 'GET',
       headers: this.getHeaders(),
       mode: 'cors',
-      credentials: 'omit',
+      credentials: 'omit'
     });
-
+    
+    console.log('📡 Réponse HTTP:', response.status, response.statusText);
+    
     if (!response.ok) {
       if (response.status === 401) {
         throw new Error('Token KoBoToolbox invalide. Vérifiez votre token d\'authentification.');
@@ -54,42 +59,61 @@ export class KoBoService {
       } else if (response.status === 404) {
         throw new Error('Ressource KoBoToolbox non trouvée. Vérifiez l\'URL ou l\'UID du formulaire.');
       } else {
-        throw new Error(`Erreur KoBoToolbox ${response.status}: ${response.statusText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     }
-
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('La réponse KoBoToolbox n\'est pas au format JSON.');
-    }
-
-    return response.json();
+    
+    return response;
   }
 
   async getAssets(): Promise<KoBoAsset[]> {
     try {
-      const response = await this.makeRequest<KoBoAssetsResponse>(`${this.baseUrl}/assets/`);
+      const response = await this.makeRequest('/assets/');
+      const data = await response.json();
+      
+      console.log('📊 Assets reçus:', data);
       
       // Filtrer seulement les formulaires déployés
-      return response.results.filter(asset => 
+      const assets = data.results?.filter((asset: KoBoAsset) => 
         asset.asset_type === 'survey' && 
         asset.deployment__active === true
-      );
+      ) || [];
+      
+      console.log(`✅ ${assets.length} formulaires actifs trouvés`);
+      return assets;
     } catch (error) {
       console.error('Erreur lors de la récupération des formulaires KoBoToolbox:', error);
       throw error;
     }
   }
 
-  async getAssetData(uid: string, limit: number = 100): Promise<any[]> {
+  async getAssetData(assetId: string): Promise<any[]> {
     try {
-      const url = `${this.baseUrl}/assets/${uid}/data/?format=json&limit=${limit}`;
-      const response = await this.makeRequest<KoBoDataResponse>(url);
+      // Endpoint correct selon la doc officielle
+      const endpoint = `/assets/${assetId}/data/`;
+      console.log('🔄 Requête vers:', this.baseUrl + endpoint);
       
-      return response.results || [];
+      const response = await this.makeRequest(endpoint);
+      const data = await response.json();
+      
+      console.log('📊 Réponse API complète:', data);
+      console.log('📊 Type de data:', typeof data);
+      console.log('📊 Clés disponibles:', Object.keys(data || {}));
+      
+      // Structure standard KoboToolbox selon leur doc
+      if (data && data.results) {
+        console.log(`✅ ${data.count || data.results.length} soumissions trouvées`);
+        return data.results;
+      } else if (Array.isArray(data)) {
+        console.log(`✅ ${data.length} soumissions (format direct)`);
+        return data;
+      } else {
+        console.log('⚠️ Structure de données inattendue:', data);
+        return [];
+      }
     } catch (error) {
-      console.error(`Erreur lors de la récupération des données du formulaire ${uid}:`, error);
-      throw error;
+      console.error('❌ Erreur getAssetData:', error);
+      throw new Error(`Impossible de récupérer les données: ${error.message}`);
     }
   }
 
@@ -107,12 +131,12 @@ export class KoBoService {
       
       for (const asset of assets) {
         try {
-          const data = await this.getAssetData(asset.uid, maxRecordsPerForm);
+          const data = await this.getAssetData(asset.uid);
           
           allData.push({
             formName: asset.name,
             uid: asset.uid,
-            data: data,
+            data: data.slice(0, maxRecordsPerForm),
             count: asset.deployment__submission_count || data.length,
           });
         } catch (error) {
@@ -142,21 +166,13 @@ export class KoBoService {
     }
 
     if (url.includes('/api/v2/assets/') && url.includes('/data/')) {
-      if (url.includes('format=json')) {
-        return { isValid: true, type: 'data', message: 'URL valide pour récupérer les données d\'un formulaire.' };
-      } else {
-        return { 
-          isValid: false, 
-          type: 'data', 
-          message: 'Ajoutez "?format=json" à la fin de l\'URL pour récupérer les données au format JSON.' 
-        };
-      }
+      return { isValid: true, type: 'data', message: 'URL valide pour récupérer les données d\'un formulaire.' };
     }
 
     return { 
       isValid: false, 
       type: 'unknown', 
-      message: 'URL KoBoToolbox non reconnue. Utilisez /api/v2/assets/ ou /api/v2/assets/{uid}/data/?format=json' 
+      message: 'URL KoBoToolbox non reconnue. Utilisez /api/v2/assets/ ou /api/v2/assets/{uid}/data/' 
     };
   }
 }
