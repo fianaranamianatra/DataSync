@@ -78,11 +78,15 @@ const ConfigPage: React.FC = () => {
       };
       
       if (config.token) {
-        headers['Authorization'] = config.url.includes('kobotoolbox.org') 
-          ? `Token ${config.token}` 
-          : `Bearer ${config.token}`;
+        // Support pour différents types d'authentification
+        if (config.url.includes('kobotoolbox.org')) {
+          headers['Authorization'] = `Token ${config.token}`;
+        } else {
+          headers['Authorization'] = `Bearer ${config.token}`;
+        }
       }
       
+      // Configuration de la requête avec gestion CORS
       const fetchOptions: RequestInit = {
         method: 'GET',
         headers,
@@ -90,16 +94,7 @@ const ConfigPage: React.FC = () => {
         credentials: 'omit',
       };
       
-      // Pour KoBoToolbox, tester toujours l'endpoint des assets
-      let testUrl = config.url;
-      if (config.url.includes('kobotoolbox.org') && !config.url.includes('/api/v2/assets/')) {
-        testUrl = 'https://kf.kobotoolbox.org/api/v2/assets/';
-        setMessage('Test de connexion sur l\'endpoint KoBoToolbox des formulaires...');
-      } else if (config.url.includes('kobotoolbox.org') && config.url.includes('/data/')) {
-        testUrl = 'https://kf.kobotoolbox.org/api/v2/assets/';
-      }
-      
-      const response = await fetch(testUrl, fetchOptions);
+      const response = await fetch(config.url, fetchOptions);
       
       if (response.ok) {
         const contentType = response.headers.get('content-type');
@@ -115,13 +110,12 @@ const ConfigPage: React.FC = () => {
             
             // Message spécifique pour KoBoToolbox
             if (config.url.includes('kobotoolbox.org')) {
-              if (testData.results && Array.isArray(testData.results)) {
-                const deployedForms = testData.results.filter((asset: any) => 
-                  asset.asset_type === 'survey' && asset.deployment__active === true
-                );
-                setMessage(`Connexion KoBoToolbox réussie ! ${deployedForms.length} formulaire(s) actif(s) trouvé(s) sur ${testData.results.length} total.`);
+              if (config.url.includes('/assets')) {
+                setMessage(`Connexion réussie ! ${Array.isArray(testData.results) ? testData.results.length : 'Plusieurs'} formulaire(s) trouvé(s).`);
+              } else if (config.url.includes('/data/')) {
+                setMessage('Connexion réussie ! Données de formulaire accessibles.');
               } else {
-                setMessage('Connexion KoBoToolbox réussie ! Endpoint accessible.');
+                setMessage('Connexion réussie ! Endpoint KoBoToolbox accessible.');
               }
             } else {
               setMessage('Connexion réussie ! L\'endpoint retourne du JSON valide.');
@@ -140,7 +134,7 @@ const ConfigPage: React.FC = () => {
           setMessage('Endpoint non trouvé (404). Vérifiez l\'URL.');
         } else if (response.status === 401) {
           if (config.url.includes('kobotoolbox.org')) {
-            setMessage('Non autorisé (401). Vérifiez votre token KoBoToolbox dans les paramètres de votre compte.');
+            setMessage('Non autorisé (401). Vérifiez votre token KoBoToolbox. Format requis: Token YOUR_TOKEN');
           } else {
             setMessage('Non autorisé (401). Vérifiez votre token d\'authentification.');
           }
@@ -194,7 +188,7 @@ const ConfigPage: React.FC = () => {
             <div className="text-xs text-gray-500 mb-2">
               <p className="mb-1">Exemples d'URLs :</p>
               <ul className="list-disc list-inside space-y-1 ml-2">
-                <li>KoBoToolbox: https://kf.kobotoolbox.org/api/v2/assets/ (l'app récupérera automatiquement les données de tous vos formulaires)</li>
+                <li>KoBoToolbox: https://kf.kobotoolbox.org/api/v2/assets/</li>
                 <li>Générique: https://jsonplaceholder.typicode.com/posts</li>
               </ul>
             </div>
@@ -228,23 +222,21 @@ const ConfigPage: React.FC = () => {
           </div>
 
           {/* Aide spécifique pour KoBoToolbox */}
-          {(config.url.includes('kobotoolbox.org') || config.url === '') && (
+          {config.url.includes('kobotoolbox.org') && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <h4 className="font-medium text-blue-900 mb-2">Configuration KoBoToolbox</h4>
               <div className="text-sm text-blue-800 space-y-2">
-                <p><strong>URL recommandée :</strong></p>
+                <p><strong>Pour lister vos formulaires :</strong></p>
                 <code className="bg-blue-100 px-2 py-1 rounded text-xs">
                   https://kf.kobotoolbox.org/api/v2/assets/
                 </code>
                 
-                <p><strong>Fonctionnement :</strong></p>
-                <ul className="list-disc list-inside space-y-1 ml-2">
-                  <li>L'application récupère automatiquement la liste de vos formulaires</li>
-                  <li>Puis synchronise les données de chaque formulaire actif</li>
-                  <li>Utilise toujours le format JSON pour les données</li>
-                </ul>
+                <p><strong>Pour récupérer les données d'un formulaire :</strong></p>
+                <code className="bg-blue-100 px-2 py-1 rounded text-xs">
+                  https://kf.kobotoolbox.org/api/v2/assets/[UID_FORMULAIRE]/data/
+                </code>
                 
-                <p><strong>Token API :</strong> Récupérez votre token depuis Paramètres → Token API dans votre compte KoBoToolbox</p>
+                <p><strong>Token API :</strong> Récupérez votre token depuis votre compte KoBoToolbox</p>
               </div>
             </div>
           )}
@@ -292,8 +284,8 @@ const ConfigPage: React.FC = () => {
             <ol className="list-decimal list-inside space-y-1 ml-2">
               <li>Connectez-vous à votre compte KoBoToolbox</li>
               <li>Allez dans Paramètres → Token API pour récupérer votre token</li>
-              <li>Utilisez l'URL <code className="bg-gray-100 px-1 rounded">https://kf.kobotoolbox.org/api/v2/assets/</code></li>
-              <li>L'application synchronisera automatiquement tous vos formulaires actifs</li>
+              <li>Utilisez l'URL <code className="bg-gray-100 px-1 rounded">https://kf.kobotoolbox.org/api/v2/assets/</code> pour lister vos formulaires</li>
+              <li>Pour les données d'un formulaire spécifique, ajoutez l'UID du formulaire : <code className="bg-gray-100 px-1 rounded">/api/v2/assets/[UID]/data/</code></li>
             </ol>
           </div>
           

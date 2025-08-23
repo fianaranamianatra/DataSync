@@ -64,15 +64,7 @@ const DataPage: React.FC = () => {
       
       const fetchedRecords: DataRecord[] = pageData.map(doc => ({
         id: doc.id,
-        data: doc.data().apiType === 'kobotoolbox' ? 
-          (doc.data().data || []).flatMap((form: any) => 
-            (form.data || []).map((item: any) => ({
-              ...item,
-              _formName: form.formName,
-              _formUid: form.formUid
-            }))
-          ) : 
-          (doc.data().data || []),
+        data: doc.data().data || [],
         createdAt: doc.data().createdAt.toDate(),
       }));
       
@@ -117,14 +109,13 @@ const DataPage: React.FC = () => {
     if (allData.length === 0) return;
     
     // Obtenir les clés du premier objet pour les en-têtes
-    const headers = Object.keys(allData[0] || {}).filter(key => !key.startsWith('_'));
-    const csvHeaders = ['Date', 'Formulaire', ...headers].join(',');
+    const headers = Object.keys(allData[0] || {});
+    const csvHeaders = ['Date', ...headers].join(',');
     
     const csvData = records.flatMap(record =>
       record.data.map(item => {
         const row = [
           record.createdAt.toLocaleDateString('fr-FR'),
-          item._formName || 'N/A',
           ...headers.map(header => `"${item[header] || ''}"`),
         ];
         return row.join(',');
@@ -218,11 +209,6 @@ const DataPage: React.FC = () => {
                   <p className="text-sm text-gray-600">
                     Synchronisé le {record.createdAt.toLocaleDateString('fr-FR')} à {record.createdAt.toLocaleTimeString('fr-FR')}
                     {' '}({record.data.length} élément{record.data.length > 1 ? 's' : ''})
-                    {record.data[0]?._formName && (
-                      <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
-                        KoBoToolbox
-                      </span>
-                    )}
                   </p>
                 </div>
                 
@@ -231,34 +217,20 @@ const DataPage: React.FC = () => {
                     <table className="w-full">
                       <thead className="bg-gray-50">
                         <tr>
-                          {record.data[0]?._formName && (
-                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              Formulaire
-                            </th>
-                          )}
                           {Object.keys(record.data[0]).map((key) => (
-                            !key.startsWith('_') && (
-                              <th key={key} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                {key}
-                              </th>
-                            )
+                            <th key={key} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              {key}
+                            </th>
                           ))}
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
                         {record.data.slice(0, 5).map((item, index) => (
                           <tr key={index}>
-                            {item._formName && (
-                              <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 font-medium">
-                                {item._formName}
+                            {Object.values(item).map((value: any, valueIndex) => (
+                              <td key={valueIndex} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
+                                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                               </td>
-                            )}
-                            {Object.entries(item).map(([key, value]: [string, any], valueIndex) => (
-                              !key.startsWith('_') && (
-                                <td key={valueIndex} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                  {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                                </td>
-                              )
                             ))}
                           </tr>
                         ))}
