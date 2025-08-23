@@ -66,38 +66,87 @@ const ConfigPage: React.FC = () => {
     setTestResult(null);
     
     try {
-      const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
-      const targetUrl = 'https://kf.kobotoolbox.org/api/v2/assets/a7h7L7wxkDxgtn3wGPePAr/data.json';
-      const finalUrl = proxyUrl + encodeURIComponent(targetUrl);
-
-      // Requête simple sans headers d'authentification
-      const response = await fetch(finalUrl, {
+      // Valider l'URL
+      try {
+        new URL(config.url);
+      } catch (urlError) {
+        throw new Error('URL invalide. Vérifiez le format de l\'URL.');
+      }
+      
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+      };
+      
+      if (config.token) {
+        // Support pour différents types d'authentification
+        if (config.url.includes('kobotoolbox.org')) {
+          headers['Authorization'] = `Token ${config.token}`;
+        } else {
+          headers['Authorization'] = `Bearer ${config.token}`;
+        }
+      }
+      
+      // Configuration de la requête avec gestion CORS
+      const fetchOptions: RequestInit = {
         method: 'GET',
-        mode: 'cors'
-      });
-
-      const data = await response.json();
-      console.log('Données récupérées:', data);
+        headers,
+        mode: 'cors',
+        credentials: 'omit',
+      };
+      
+      const response = await fetch(config.url, fetchOptions);
       
       if (response.ok) {
-        setTestResult('success');
-        setMessage(`Connexion réussie ! ${Array.isArray(data) ? data.length : 'Plusieurs'} enregistrement(s) trouvé(s).`);
+        const contentType = response.headers.get('content-type');
+        
+        if (contentType && contentType.includes('text/html')) {
+          setTestResult('error');
+          setMessage('L\'URL semble pointer vers une page web. Utilisez un endpoint API qui retourne du JSON.');
+        } else if (contentType && (contentType.includes('application/json') || contentType.includes('text/plain'))) {
+          // Tester si c'est du JSON valide
+          try {
+            const testData = await response.json();
+            setTestResult('success');
+            
+            // Message spécifique pour KoBoToolbox
+            if (config.url.includes('kobotoolbox.org')) {
+              if (config.url.includes('/assets')) {
+                setMessage(`Connexion réussie ! ${Array.isArray(testData.results) ? testData.results.length : 'Plusieurs'} formulaire(s) trouvé(s).`);
+              } else if (config.url.includes('/data/')) {
+                setMessage('Connexion réussie ! Données de formulaire accessibles.');
+              } else {
+                setMessage('Connexion réussie ! Endpoint KoBoToolbox accessible.');
+              }
+            } else {
+              setMessage('Connexion réussie ! L\'endpoint retourne du JSON valide.');
+            }
+          } catch (jsonError) {
+            setTestResult('error');
+            setMessage('L\'endpoint est accessible mais ne retourne pas du JSON valide.');
+          }
+        } else {
+          setTestResult('success');
+          setMessage(`Connexion réussie ! Type de contenu: ${contentType || 'non spécifié'}`);
+        }
       } else {
         setTestResult('error');
         if (response.status === 404) {
-          setMessage('Ressource non trouvée (404). Vérifiez l\'URL de votre API.');
+          setMessage('Endpoint non trouvé (404). Vérifiez l\'URL.');
         } else if (response.status === 401) {
-          setMessage('Non autorisé (401). Vérifiez votre token d\'authentification.');
+          if (config.url.includes('kobotoolbox.org')) {
+            setMessage('Non autorisé (401). Vérifiez votre token KoBoToolbox. Format requis: Token YOUR_TOKEN');
+          } else {
+            setMessage('Non autorisé (401). Vérifiez votre token d\'authentification.');
+          }
         } else if (response.status === 403) {
           setMessage('Accès interdit (403). Vérifiez vos permissions sur cette ressource.');
         } else {
-          setMessage(`Erreur HTTP ${response.status}: ${response.statusText}`);
+          setMessage(`Erreur: ${response.status} ${response.statusText}`);
         }
       }
     } catch (error) {
       console.error('Erreur de test de connexion:', error);
       setTestResult('error');
-      
       if (error instanceof Error) {
         let errorMessage = error.message;
         

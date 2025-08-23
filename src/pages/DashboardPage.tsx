@@ -61,110 +61,21 @@ const DashboardPage: React.FC = () => {
     setMessage('');
     
     try {
-      // Récupérer la configuration API
-      const settingsDoc = await getDoc(doc(db, 'user_settings', currentUser.uid));
-      const settings = settingsDoc.data();
-      
-      if (!settings?.apiUrl) {
-        setMessage('Configurez d\'abord votre API dans la page Configuration');
-        setSyncing(false);
-        return;
-      }
-      
-      // Valider l'URL
-      let apiUrl: URL;
-      try {
-        apiUrl = new URL(settings.apiUrl);
-      } catch (urlError) {
-        throw new Error('L\'URL de l\'API n\'est pas valide. Vérifiez le format de l\'URL.');
-      }
-      
-      // Appeler l'API
-      const headers: Record<string, string> = {
-        'Accept': 'application/json',
-      };
-      
-      if (settings.apiToken) {
-        // Support pour différents types d'authentification
-        if (settings.apiUrl.includes('kobotoolbox.org')) {
-          headers['Authorization'] = `Token ${settings.apiToken}`;
-        } else {
-          headers['Authorization'] = `Bearer ${settings.apiToken}`;
-        }
-      }
-      
-      // Configuration de la requête avec gestion CORS
-      const fetchOptions: RequestInit = {
+      const proxyUrl = 'https://api.codetabs.com/v1/proxy?quest=';
+      const targetUrl = 'https://kf.kobotoolbox.org/api/v2/assets/a7h7L7wxkDxgtn3wGPePAr/data.json';
+      const finalUrl = proxyUrl + encodeURIComponent(targetUrl);
+
+      // Requête simple sans headers d'authentification
+      const response = await fetch(finalUrl, {
         method: 'GET',
-        headers,
-        mode: 'cors',
-        credentials: 'omit',
-      };
-      
-      const response = await fetch(settings.apiUrl, fetchOptions);
-      
-      if (!response.ok) {
-        // Gérer les erreurs HTTP spécifiques
-        if (response.status === 404) {
-          throw new Error(`Endpoint non trouvé (404). Vérifiez que l'URL "${settings.apiUrl}" est correcte.`);
-        } else if (response.status === 401) {
-          throw new Error('Non autorisé (401). Vérifiez votre token d\'authentification.');
-        } else if (response.status === 403) {
-          throw new Error('Accès interdit (403). Vérifiez vos permissions.');
-        } else if (response.status >= 500) {
-          throw new Error(`Erreur serveur (${response.status}). Le serveur API rencontre des problèmes.`);
-        } else {
-          throw new Error(`Erreur HTTP ${response.status}: ${response.statusText}`);
-        }
-      }
-      
-      // Vérifier le type de contenu de la réponse
-      const contentType = response.headers.get('content-type');
-      
-      if (contentType && contentType.includes('text/html')) {
-        throw new Error(`L'URL semble pointer vers une page web (HTML) plutôt qu'un endpoint API. Vérifiez que l'URL "${settings.apiUrl}" est bien un endpoint API qui retourne du JSON.`);
-      }
-      
-      if (contentType && !contentType.includes('application/json') && !contentType.includes('text/plain')) {
-        throw new Error(`L'API ne retourne pas du JSON. Type de contenu reçu: ${contentType}. L'endpoint doit retourner du JSON (application/json).`);
-      }
-      
-      let data;
-      try {
-        data = await response.json();
-      } catch (jsonError) {
-        throw new Error('La réponse de l\'API n\'est pas un JSON valide. Vérifiez que l\'endpoint retourne du JSON correctement formaté.');
-      }
-      
-      // Valider que nous avons des données
-      if (data === null || data === undefined) {
-        throw new Error('L\'API a retourné des données vides.');
-      }
+        mode: 'cors'
+      });
+
+      const data = await response.json();
+      console.log('Données récupérées:', data);
       
       // Convertir en tableau si ce n'est pas déjà le cas
-      let dataArray: any[];
-      if (Array.isArray(data)) {
-        dataArray = data;
-      } else if (typeof data === 'object' && data !== null) {
-        // Gestion spécifique pour KoBoToolbox
-        if (data.results && Array.isArray(data.results)) {
-          dataArray = data.results;
-        } else if (data.data && Array.isArray(data.data)) {
-          dataArray = data.data;
-        } else if (data.items && Array.isArray(data.items)) {
-          dataArray = data.items;
-        } else if (settings.apiUrl.includes('kobotoolbox.org') && settings.apiUrl.includes('/data/')) {
-          // Pour les données de formulaire KoBoToolbox, les données sont directement dans l'objet
-          dataArray = [data];
-        } else {
-          // Traiter l'objet comme un seul élément
-          dataArray = [data];
-        }
-      } else if (typeof data === 'object') {
-        dataArray = [data];
-      } else {
-        throw new Error('Format de données non supporté. L\'API doit retourner un objet JSON ou un tableau.');
-      }
+      let dataArray: any[] = Array.isArray(data) ? data : [data];
       
       if (dataArray.length === 0) {
         setMessage('Synchronisation réussie, mais aucune donnée n\'a été trouvée.');
@@ -180,16 +91,15 @@ const DashboardPage: React.FC = () => {
         data: limitedData,
         createdAt: new Date(),
         userId: currentUser.uid,
-        source: settings.apiUrl,
+        source: targetUrl,
         recordCount: limitedData.length,
-        apiType: settings.apiUrl.includes('kobotoolbox.org') ? 'kobotoolbox' : 'generic',
+        apiType: 'kobotoolbox',
       };
       
       await setDoc(doc(db, 'api_data', `sync_${Date.now()}`), docData);
       
       // Mettre à jour la dernière synchronisation
       await setDoc(doc(db, 'user_settings', currentUser.uid), {
-        ...settings,
         lastSync: new Date(),
       }, { merge: true });
       
@@ -197,22 +107,7 @@ const DashboardPage: React.FC = () => {
       loadStats();
     } catch (error) {
       console.error('Erreur de synchronisation détaillée:', error);
-      if (error instanceof Error) {
-        let errorMessage = error.message;
-        
-        // Messages d'erreur spécifiques pour les problèmes courants
-        if (error.message.includes('Failed to fetch')) {
-          errorMessage = 'Impossible de contacter l\'API. Vérifiez votre connexion internet et que l\'URL est correcte. Si vous utilisez KoBoToolbox, assurez-vous que votre token est valide.';
-        } else if (error.message.includes('CORS')) {
-          errorMessage = 'Problème CORS détecté. L\'API ne permet pas les requêtes depuis cette application web. Contactez l\'administrateur de l\'API.';
-        } else if (error.message.includes('NetworkError')) {
-          errorMessage = 'Erreur réseau. Vérifiez votre connexion internet et l\'URL de l\'API.';
-        }
-        
-        setMessage(`Erreur de synchronisation: ${errorMessage}`);
-      } else {
-        setMessage('Erreur de synchronisation inconnue');
-      }
+      setMessage(`Erreur de synchronisation: ${error instanceof Error ? error.message : 'Erreur inconnue'}`);
     }
     
     setSyncing(false);
