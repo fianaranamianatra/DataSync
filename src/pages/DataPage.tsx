@@ -220,28 +220,40 @@ const DataPage: React.FC = () => {
                 
                 <div className="overflow-x-auto">
                   {record.data.length > 0 && (
-                    <table className="w-full">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          {Object.keys(record.data[0]).map((key) => (
-                            <th key={key} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                              {key}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {record.data.slice(0, 5).map((item, index) => (
-                          <tr key={index}>
-                            {Object.values(item).map((value: any, valueIndex) => (
-                              <td key={valueIndex} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                              </td>
+                    <div className="space-y-4">
+                      {record.data.slice(0, 5).map((item, index) => (
+                        <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <h4 className="text-sm font-medium text-gray-900">
+                              Enregistrement #{index + 1}
+                            </h4>
+                            <span className="text-xs text-gray-500">
+                              {Object.keys(item).length} champ{Object.keys(item).length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {Object.entries(item).map(([key, value], fieldIndex) => (
+                              <div key={fieldIndex} className="flex flex-col">
+                                <dt className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-1">
+                                  {key}
+                                </dt>
+                                <dd className="text-sm text-gray-900 break-words">
+                                  {typeof value === 'object' ? (
+                                    <pre className="bg-gray-50 p-2 rounded text-xs overflow-x-auto">
+                                      {JSON.stringify(value, null, 2)}
+                                    </pre>
+                                  ) : (
+                                    <span className={value ? '' : 'text-gray-400 italic'}>
+                                      {value || 'Vide'}
+                                    </span>
+                                  )}
+                                </dd>
+                              </div>
                             ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                   
                   {record.data.length > 5 && (

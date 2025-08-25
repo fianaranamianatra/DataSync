@@ -1,44 +1,28 @@
 import React, { useState } from 'react';
-import { Calendar, Filter, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Filter, Calendar, Users, Smartphone, X } from 'lucide-react';
+import DatePicker from 'react-datepicker';
+import { useDashboardStore } from '../../stores/dashboardStore';
+import "react-datepicker/dist/react-datepicker.css";
 
-interface FilterOptions {
-  dateRange: {
-    start: string;
-    end: string;
-  };
-  modules: string[];
-  users: string[];
-  status: string[];
-}
-
-interface FilterPanelProps {
-  filters: FilterOptions;
-  onFiltersChange: (filters: FilterOptions) => void;
-  availableModules: string[];
-  availableUsers: string[];
-}
-
-const FilterPanel: React.FC<FilterPanelProps> = ({
-  filters,
-  onFiltersChange,
-  availableModules,
-  availableUsers
-}) => {
+const FilterPanel: React.FC = () => {
+  const { filters, setFilters, data } = useDashboardStore();
   const [isOpen, setIsOpen] = useState(false);
 
-  const updateFilter = (key: keyof FilterOptions, value: any) => {
-    onFiltersChange({
-      ...filters,
-      [key]: value
-    });
+  const uniqueUsers = [...new Set(data.map(item => item.submitted_by))];
+  const uniqueDevices = [...new Set(data.map(item => item.device))];
+  const uniqueModules = [...new Set(data.flatMap(item => Object.keys(item.modules)))];
+
+  const handleFilterChange = (key: keyof typeof filters, value: any) => {
+    setFilters({ [key]: value });
   };
 
   const clearFilters = () => {
-    onFiltersChange({
-      dateRange: { start: '', end: '' },
+    setFilters({
+      dateRange: { start: null, end: null },
       modules: [],
       users: [],
-      status: []
+      devices: []
     });
   };
 
@@ -47,16 +31,18 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
     filters.dateRange.end || 
     filters.modules.length > 0 || 
     filters.users.length > 0 || 
-    filters.status.length > 0;
+    filters.devices.length > 0;
 
   return (
     <div className="relative">
-      <button
+      <motion.button
+        whileHover={{ scale: 1.02 }}
+        whileTap={{ scale: 0.98 }}
         onClick={() => setIsOpen(!isOpen)}
         className={`flex items-center space-x-2 px-4 py-2 rounded-lg border transition-all ${
           hasActiveFilters 
-            ? 'bg-blue-50 border-blue-200 text-blue-700' 
-            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+            ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300' 
+            : 'bg-white dark:bg-gray-800 border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
         }`}
       >
         <Filter size={16} />
@@ -67,128 +53,144 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
               filters.dateRange.start && 'Date',
               filters.modules.length > 0 && 'Modules',
               filters.users.length > 0 && 'Utilisateurs',
-              filters.status.length > 0 && 'Statut'
+              filters.devices.length > 0 && 'Appareils'
             ].filter(Boolean).length}
           </span>
         )}
-      </button>
+      </motion.button>
 
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-80 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-          <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-            <h3 className="font-medium text-gray-900">Filtres</h3>
-            <div className="flex items-center space-x-2">
-              {hasActiveFilters && (
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -10, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -10, scale: 0.95 }}
+            transition={{ duration: 0.2 }}
+            className="absolute top-full left-0 mt-2 w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-50"
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="font-semibold text-gray-900 dark:text-white">Filtres avancés</h3>
+              <div className="flex items-center space-x-2">
+                {hasActiveFilters && (
+                  <button
+                    onClick={clearFilters}
+                    className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  >
+                    Effacer tout
+                  </button>
+                )}
                 <button
-                  onClick={clearFilters}
-                  className="text-sm text-gray-500 hover:text-gray-700"
+                  onClick={() => setIsOpen(false)}
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                 >
-                  Effacer tout
+                  <X size={16} />
                 </button>
-              )}
-              <button
-                onClick={() => setIsOpen(false)}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div className="p-4 space-y-4">
-            {/* Plage de dates */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                <Calendar size={16} className="inline mr-1" />
-                Période
-              </label>
-              <div className="grid grid-cols-2 gap-2">
-                <input
-                  type="date"
-                  value={filters.dateRange.start}
-                  onChange={(e) => updateFilter('dateRange', { ...filters.dateRange, start: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <input
-                  type="date"
-                  value={filters.dateRange.end}
-                  onChange={(e) => updateFilter('dateRange', { ...filters.dateRange, end: e.target.value })}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
               </div>
             </div>
 
-            {/* Modules */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Modules</label>
-              <div className="max-h-32 overflow-y-auto space-y-1">
-                {availableModules.map(module => (
-                  <label key={module} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={filters.modules.includes(module)}
-                      onChange={(e) => {
-                        const newModules = e.target.checked
-                          ? [...filters.modules, module]
-                          : filters.modules.filter(m => m !== module);
-                        updateFilter('modules', newModules);
-                      }}
-                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{module}</span>
-                  </label>
-                ))}
+            <div className="p-4 space-y-6">
+              {/* Date Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <Calendar size={16} className="inline mr-1" />
+                  Période
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <DatePicker
+                    selected={filters.dateRange.start}
+                    onChange={(date) => handleFilterChange('dateRange', { ...filters.dateRange, start: date })}
+                    placeholderText="Date de début"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                  <DatePicker
+                    selected={filters.dateRange.end}
+                    onChange={(date) => handleFilterChange('dateRange', { ...filters.dateRange, end: date })}
+                    placeholderText="Date de fin"
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* Utilisateurs */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Utilisateurs</label>
-              <div className="max-h-32 overflow-y-auto space-y-1">
-                {availableUsers.map(user => (
-                  <label key={user} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={filters.users.includes(user)}
-                      onChange={(e) => {
-                        const newUsers = e.target.checked
-                          ? [...filters.users, user]
-                          : filters.users.filter(u => u !== user);
-                        updateFilter('users', newUsers);
-                      }}
-                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700">{user}</span>
-                  </label>
-                ))}
+              {/* Users */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <Users size={16} className="inline mr-1" />
+                  Utilisateurs
+                </label>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {uniqueUsers.map(user => (
+                    <label key={user} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={filters.users.includes(user)}
+                        onChange={(e) => {
+                          const newUsers = e.target.checked
+                            ? [...filters.users, user]
+                            : filters.users.filter(u => u !== user);
+                          handleFilterChange('users', newUsers);
+                        }}
+                        className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{user}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Statut */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Statut</label>
-              <div className="space-y-1">
-                {['active', 'deprecated', 'pending'].map(status => (
-                  <label key={status} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={filters.status.includes(status)}
-                      onChange={(e) => {
-                        const newStatus = e.target.checked
-                          ? [...filters.status, status]
-                          : filters.status.filter(s => s !== status);
-                        updateFilter('status', newStatus);
-                      }}
-                      className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-700 capitalize">{status}</span>
-                  </label>
-                ))}
+              {/* Devices */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <Smartphone size={16} className="inline mr-1" />
+                  Appareils
+                </label>
+                <div className="space-y-1">
+                  {uniqueDevices.map(device => (
+                    <label key={device} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={filters.devices.includes(device)}
+                        onChange={(e) => {
+                          const newDevices = e.target.checked
+                            ? [...filters.devices, device]
+                            : filters.devices.filter(d => d !== device);
+                          handleFilterChange('devices', newDevices);
+                        }}
+                        className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300 capitalize">{device}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Modules */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Modules
+                </label>
+                <div className="max-h-32 overflow-y-auto space-y-1">
+                  {uniqueModules.map(module => (
+                    <label key={module} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={filters.modules.includes(module)}
+                        onChange={(e) => {
+                          const newModules = e.target.checked
+                            ? [...filters.modules, module]
+                            : filters.modules.filter(m => m !== module);
+                          handleFilterChange('modules', newModules);
+                        }}
+                        className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-700 dark:text-gray-300">{module}</span>
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
