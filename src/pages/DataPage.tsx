@@ -213,11 +213,11 @@ const DataPage: React.FC = () => {
                 </div>
                 
                 <div className="overflow-x-auto">
-                  {record.data && record.data.length > 0 && typeof record.data[0] === 'object' && (
+                  {record.data.length > 0 && (
                     <table className="w-full">
                       <thead className="bg-gray-50">
                         <tr>
-                          {Object.keys(record.data[0] || {}).map((key) => (
+                          {Object.keys(record.data[0]).map((key) => (
                             <th key={key} className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               {key}
                             </th>
@@ -227,30 +227,15 @@ const DataPage: React.FC = () => {
                       <tbody className="bg-white divide-y divide-gray-200">
                         {record.data.slice(0, 5).map((item, index) => (
                           <tr key={index}>
-                            {Object.values(item || {}).map((value: any, valueIndex) => (
+                            {Object.values(item).map((value: any, valueIndex) => (
                               <td key={valueIndex} className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                {typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value || '')}
+                                {typeof value === 'object' ? JSON.stringify(value) : String(value)}
                               </td>
                             ))}
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  )}
-                  
-                  {record.data && record.data.length > 0 && typeof record.data[0] !== 'object' && (
-                    <div className="p-4">
-                      <h4 className="font-medium text-gray-900 mb-2">Données brutes :</h4>
-                      <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-                        {JSON.stringify(record.data, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                  
-                  {(!record.data || record.data.length === 0) && (
-                    <div className="p-4 text-center text-gray-500">
-                      Aucune donnée disponible pour cet enregistrement
-                    </div>
                   )}
                   
                   {record.data.length > 5 && (
