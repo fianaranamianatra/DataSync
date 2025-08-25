@@ -49,10 +49,10 @@ const DashboardHeader: React.FC = () => {
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
-                DataSync Analytics
+                PRODUIR VAGUE 4
               </h1>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Professional Dashboard
+                Tableau de Bord Analytique
               </p>
             </div>
           </div>

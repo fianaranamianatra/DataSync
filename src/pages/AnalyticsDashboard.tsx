@@ -18,6 +18,7 @@ import DonutChart from '../components/Charts/DonutChart';
 import BarChart from '../components/Charts/BarChart';
 import GaugeChart from '../components/Charts/GaugeChart';
 import FilterPanel from '../components/Dashboard/FilterPanel';
+import Card from '../components/UI/Card';
 
 const AnalyticsDashboard: React.FC = () => {
   const { data, filters } = useDashboardStore();
@@ -462,10 +463,10 @@ const AnalyticsDashboard: React.FC = () => {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Dashboard Analytique
+            PRODUIR VAGUE 4
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
-            Vue d'ensemble des performances et métriques
+            Tableau de Bord Analytique
           </p>
         </div>
         <FilterPanel />

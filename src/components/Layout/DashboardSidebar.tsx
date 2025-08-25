@@ -22,49 +22,49 @@ const DashboardSidebar: React.FC = () => {
     {
       href: '/dashboard',
       label: 'Vue d\'ensemble',
-      icon: <BarChart3 size={20} />
+      icon: BarChart3
     },
     {
       href: '/dashboard?tab=modules',
       label: 'Modules',
-      icon: <Database size={20} />,
+      icon: Database,
       badge: 12
     },
     {
       href: '/dashboard?tab=users',
       label: 'Utilisateurs',
-      icon: <Users size={20} />,
+      icon: Users,
       badge: 3
     },
     {
       href: '/geolocation',
       label: 'Géolocalisation',
-      icon: <MapPin size={20} />
+      icon: MapPin
     },
     {
       href: '/dashboard?tab=analytics',
       label: 'Analytiques',
-      icon: <TrendingUp size={20} />
+      icon: TrendingUp
     },
     {
       href: '/dashboard?tab=activity',
       label: 'Activité',
-      icon: <Activity size={20} />
+      icon: Activity
     },
     {
       href: '/calendar',
       label: 'Calendrier',
-      icon: <Calendar size={20} />
+      icon: Calendar
     },
     {
       href: '/reports',
       label: 'Rapports',
-      icon: <FileText size={20} />
+      icon: FileText
     },
     {
       href: '/config',
       label: 'Paramètres',
-      icon: <Settings size={20} />
+      icon: Settings
     }
   ];
 
@@ -88,7 +88,7 @@ const DashboardSidebar: React.FC = () => {
       <div className="p-4">
         <nav className="space-y-2">
           {menuItems.map((item) => {
-            const Icon = item.icon;
+            const IconComponent = item.icon;
             const active = isActive(item.href);
             return (
               <Link
@@ -105,7 +105,7 @@ const DashboardSidebar: React.FC = () => {
                 }`}
                 >
                 <div className="flex-shrink-0">
-                  <Icon size={20} />
+                  <IconComponent size={20} />
                 </div>
                 
                 {!sidebarCollapsed && (

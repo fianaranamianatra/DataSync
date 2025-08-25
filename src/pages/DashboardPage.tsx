@@ -466,8 +466,8 @@ const DashboardPage: React.FC = () => {
     <div className="space-y-8">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold text-[#2d3436] mb-2">Dashboard</h1>
-          <p className="text-gray-600">Vue d'ensemble de vos données</p>
+          <h1 className="text-2xl font-bold text-[#2d3436] mb-2">PRODUIR VAGUE 4</h1>
+          <p className="text-gray-600">Tableau de Bord Analytique</p>
         </div>
         
         <div className="flex items-center space-x-4">
