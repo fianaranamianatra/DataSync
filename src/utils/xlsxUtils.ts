@@ -60,7 +60,20 @@ export class XlsxUtils {
           const obj: any = {};
           headers.forEach((header, index) => {
             if (header && header.trim() !== '') {
-              obj[header.trim()] = row[index] || '';
+              // Sanitize header to comply with Firestore field naming restrictions
+              let sanitizedHeader = header.trim();
+              
+              // Remove leading and trailing double underscores (reserved by Firestore)
+              if (sanitizedHeader.startsWith('__') && sanitizedHeader.endsWith('__')) {
+                sanitizedHeader = sanitizedHeader.replace(/^__/, '').replace(/__$/, '');
+                
+                // If header becomes empty after sanitization, use a fallback
+                if (sanitizedHeader === '') {
+                  sanitizedHeader = `field_${index}`;
+                }
+              }
+              
+              obj[sanitizedHeader] = row[index] || '';
             }
           });
           return obj;
