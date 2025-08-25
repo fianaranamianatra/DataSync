@@ -122,6 +122,13 @@ const DashboardPage: React.FC = () => {
           throw new Error('L\'URL de l\'API n\'est pas valide. Vérifiez le format de l\'URL.');
         }
         
+        // Normaliser l'URL KoBoToolbox si nécessaire
+        let normalizedUrl = settings.apiUrl;
+        if (settings.apiUrl.includes('kobotoolbox.org') && settings.apiUrl.includes('/assets/') && !settings.apiUrl.includes('/api/v2/')) {
+          // Convertir le format court vers le format API complet
+          normalizedUrl = settings.apiUrl.replace('/assets/', '/api/v2/assets/');
+        }
+        
         // Appeler l'API
         const headers: Record<string, string> = {
           'Accept': 'application/json',
@@ -129,7 +136,7 @@ const DashboardPage: React.FC = () => {
         
         if (settings.apiToken) {
           // Support pour différents types d'authentification
-          if (settings.apiUrl.includes('kobotoolbox.org')) {
+          if (normalizedUrl.includes('kobotoolbox.org')) {
             headers['Authorization'] = `Token ${settings.apiToken}`;
           } else {
             headers['Authorization'] = `Bearer ${settings.apiToken}`;
@@ -140,16 +147,25 @@ const DashboardPage: React.FC = () => {
         const fetchOptions: RequestInit = {
           method: 'GET',
           headers,
-          mode: 'cors',
-          credentials: 'omit',
         };
         
-        const response = await fetch(settings.apiUrl, fetchOptions);
+        let response;
+        try {
+          response = await fetch(normalizedUrl, fetchOptions);
+        } catch (fetchError) {
+          // Tentative avec mode no-cors pour détecter les problèmes CORS
+          try {
+            await fetch(normalizedUrl, { ...fetchOptions, mode: 'no-cors' });
+            throw new Error('CORS_ERROR');
+          } catch (noCorsError) {
+            throw fetchError;
+          }
+        }
         
         if (!response.ok) {
           // Gérer les erreurs HTTP spécifiques
           if (response.status === 404) {
-            throw new Error(`Endpoint non trouvé (404). Vérifiez que l'URL "${settings.apiUrl}" est correcte.`);
+            throw new Error(`Endpoint non trouvé (404). Vérifiez que l'URL "${normalizedUrl}" est correcte.`);
           } else if (response.status === 401) {
             throw new Error('Non autorisé (401). Vérifiez votre token d\'authentification.');
           } else if (response.status === 403) {
@@ -165,7 +181,7 @@ const DashboardPage: React.FC = () => {
         const contentType = response.headers.get('content-type');
         
         if (contentType && contentType.includes('text/html')) {
-          throw new Error(`L'URL semble pointer vers une page web (HTML) plutôt qu'un endpoint API. Vérifiez que l'URL "${settings.apiUrl}" est bien un endpoint API qui retourne du JSON.`);
+          throw new Error(`L'URL semble pointer vers une page web (HTML) plutôt qu'un endpoint API. Vérifiez que l'URL "${normalizedUrl}" est bien un endpoint API qui retourne du JSON.`);
         }
         
         if (contentType && !contentType.includes('application/json') && !contentType.includes('text/plain')) {
@@ -196,7 +212,7 @@ const DashboardPage: React.FC = () => {
             dataArray = data.data;
           } else if (data.items && Array.isArray(data.items)) {
             dataArray = data.items;
-          } else if (settings.apiUrl.includes('kobotoolbox.org') && (settings.apiUrl.includes('/data/') || settings.apiUrl.includes('/submissions/'))) {
+          } else if (normalizedUrl.includes('kobotoolbox.org') && (normalizedUrl.includes('/data/') || normalizedUrl.includes('/submissions/'))) {
             // Pour les données de formulaire KoBoToolbox, les données sont directement dans l'objet
             dataArray = [data];
           } else {
@@ -222,9 +238,9 @@ const DashboardPage: React.FC = () => {
           data: limitedData,
           createdAt: new Date(),
           userId: currentUser.uid,
-          source: settings.apiUrl,
+          source: normalizedUrl,
           recordCount: limitedData.length,
-          apiType: settings.apiUrl.includes('kobotoolbox.org') ? 'kobotoolbox' : 'generic',
+          apiType: normalizedUrl.includes('kobotoolbox.org') ? 'kobotoolbox' : 'generic',
         };
         
         await setDoc(doc(db, 'api_data', `sync_${Date.now()}`), docData);
@@ -244,12 +260,16 @@ const DashboardPage: React.FC = () => {
         let errorMessage = error.message;
         
         // Messages d'erreur spécifiques pour les problèmes courants
-        if (error.message.includes('Failed to fetch')) {
-          errorMessage = 'Impossible de contacter la source de données. Vérifiez votre connexion internet et que l\'URL est correcte.';
+        if (error.message === 'CORS_ERROR') {
+          errorMessage = 'Erreur CORS : La source de données ne permet pas les requêtes depuis le navigateur. Utilisez un proxy CORS ou configurez l\'API pour autoriser les requêtes cross-origin.';
+        } else if (error.message.includes('Failed to fetch')) {
+          errorMessage = 'Impossible de contacter la source de données. Causes possibles : URL incorrecte, API hors ligne, problème CORS, ou problème de connexion internet.';
         } else if (error.message.includes('CORS')) {
-          errorMessage = 'Problème CORS détecté. La source de données ne permet pas les requêtes depuis cette application web.';
+          errorMessage = 'Problème CORS : La source de données ne permet pas les requêtes depuis le navigateur.';
         } else if (error.message.includes('NetworkError')) {
           errorMessage = 'Erreur réseau. Vérifiez votre connexion internet et l\'URL.';
+        } else if (error.message.includes('TypeError')) {
+          errorMessage = 'Erreur de réseau ou URL invalide. Vérifiez l\'URL et votre connexion.';
         }
         
         setMessage(`Erreur de synchronisation: ${errorMessage}`);
@@ -292,7 +312,7 @@ const DashboardPage: React.FC = () => {
         <Card className={`border-l-4 ${
           message.includes('Erreur') ? 'border-red-400 bg-red-50' : 'border-green-400 bg-green-50'
         }`}>
-          <p className={message.includes('Erreur') ? 'text-red-700' : 'text-green-700'}>
+          <p className={`whitespace-pre-line ${message.includes('Erreur') ? 'text-red-700' : 'text-green-700'}`}>
             {message}
           </p>
         </Card>
