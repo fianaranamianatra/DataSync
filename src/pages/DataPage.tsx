@@ -209,6 +209,12 @@ const DataPage: React.FC = () => {
                   <p className="text-sm text-gray-600">
                     Synchronisé le {record.createdAt.toLocaleDateString('fr-FR')} à {record.createdAt.toLocaleTimeString('fr-FR')}
                     {' '}({record.data.length} élément{record.data.length > 1 ? 's' : ''})
+                    {/* Afficher des informations supplémentaires pour les fichiers Excel */}
+                    {(record as any).apiType === 'xlsx' && (record as any).totalRowsInFile && (record as any).totalRowsInFile > record.data.length && (
+                      <span className="text-xs text-blue-600 ml-2">
+                        ({record.data.length} sur {(record as any).totalRowsInFile} lignes du fichier Excel)
+                      </span>
+                    )}
                   </p>
                 </div>
                 

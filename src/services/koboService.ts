@@ -137,18 +137,20 @@ export class KoBoService {
       return { isValid: false, type: 'unknown', message: 'Ce n\'est pas une URL KoBoToolbox.' };
     }
 
-    if (url.includes('/api/v2/assets/') && !url.includes('/data/')) {
+    // Support pour les URLs d'assets (liste des formulaires)
+    if ((url.includes('/api/v2/assets/') || url.includes('/assets/')) && !url.includes('/data/') && !url.includes('/submissions/')) {
       return { isValid: true, type: 'assets', message: 'URL valide pour lister les formulaires.' };
     }
 
-    if (url.includes('/api/v2/assets/') && url.includes('/data/')) {
+    // Support pour les URLs de données/soumissions
+    if ((url.includes('/api/v2/assets/') && url.includes('/data/')) || url.includes('/submissions/')) {
       if (url.includes('format=json')) {
         return { isValid: true, type: 'data', message: 'URL valide pour récupérer les données d\'un formulaire.' };
       } else {
         return { 
           isValid: false, 
           type: 'data', 
-          message: 'Ajoutez "?format=json" à la fin de l\'URL pour récupérer les données au format JSON.' 
+          message: 'Assurez-vous que l\'URL contient "format=json" pour récupérer les données au format JSON.' 
         };
       }
     }
@@ -156,7 +158,7 @@ export class KoBoService {
     return { 
       isValid: false, 
       type: 'unknown', 
-      message: 'URL KoBoToolbox non reconnue. Utilisez /api/v2/assets/ ou /api/v2/assets/{uid}/data/?format=json' 
+      message: 'URL KoBoToolbox non reconnue. Utilisez une URL d\'assets ou de soumissions avec format=json.' 
     };
   }
 }
