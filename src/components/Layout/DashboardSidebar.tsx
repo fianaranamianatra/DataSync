@@ -1,5 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Link, useLocation } from 'react-router-dom';
 import { 
   BarChart3, 
   Users, 
@@ -13,67 +14,70 @@ import {
 } from 'lucide-react';
 import { useDashboardStore } from '../../stores/dashboardStore';
 
-interface MenuItem {
-  id: string;
-  label: string;
-  icon: React.ReactNode;
-  badge?: number;
-  active?: boolean;
-}
-
 const DashboardSidebar: React.FC = () => {
   const { sidebarCollapsed } = useDashboardStore();
+  const location = useLocation();
 
-  const menuItems: MenuItem[] = [
+  const menuItems = [
     {
-      id: 'overview',
+      href: '/dashboard',
       label: 'Vue d\'ensemble',
-      icon: <BarChart3 size={20} />,
-      active: true
+      icon: <BarChart3 size={20} />
     },
     {
-      id: 'modules',
+      href: '/dashboard?tab=modules',
       label: 'Modules',
       icon: <Database size={20} />,
       badge: 12
     },
     {
-      id: 'users',
+      href: '/dashboard?tab=users',
       label: 'Utilisateurs',
       icon: <Users size={20} />,
       badge: 3
     },
     {
-      id: 'geolocation',
+      href: '/geolocation',
       label: 'Géolocalisation',
       icon: <MapPin size={20} />
     },
     {
-      id: 'analytics',
+      href: '/dashboard?tab=analytics',
       label: 'Analytiques',
       icon: <TrendingUp size={20} />
     },
     {
-      id: 'activity',
+      href: '/dashboard?tab=activity',
       label: 'Activité',
       icon: <Activity size={20} />
     },
     {
-      id: 'calendar',
+      href: '/calendar',
       label: 'Calendrier',
       icon: <Calendar size={20} />
     },
     {
-      id: 'reports',
+      href: '/reports',
       label: 'Rapports',
       icon: <FileText size={20} />
     },
     {
-      id: 'settings',
+      href: '/config',
       label: 'Paramètres',
       icon: <Settings size={20} />
     }
   ];
+
+  const isActive = (href: string) => {
+    if (href === '/dashboard' && location.pathname === '/dashboard' && !location.search) {
+      return true;
+    }
+    if (href.includes('?tab=') && location.pathname === '/dashboard') {
+      const tabParam = href.split('?tab=')[1];
+      return location.search.includes(`tab=${tabParam}`);
+    }
+    return location.pathname === href;
+  };
 
   return (
     <motion.aside
@@ -83,39 +87,47 @@ const DashboardSidebar: React.FC = () => {
     >
       <div className="p-4">
         <nav className="space-y-2">
-          {menuItems.map((item) => (
-            <motion.button
-              key={item.id}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
-                item.active
-                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
-                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <div className="flex-shrink-0">
-                {item.icon}
-              </div>
-              
-              {!sidebarCollapsed && (
-                <>
-                  <span className="flex-1 text-left text-sm font-medium">
-                    {item.label}
-                  </span>
-                  {item.badge && (
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      item.active
-                        ? 'bg-white/20 text-white'
-                        : 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
-                    }`}>
-                      {item.badge}
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.href);
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+              >
+                <motion.div
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-all duration-200 ${
+                  active
+                    ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                }`}
+                >
+                <div className="flex-shrink-0">
+                  <Icon size={20} />
+                </div>
+                
+                {!sidebarCollapsed && (
+                  <>
+                    <span className="flex-1 text-left text-sm font-medium">
+                      {item.label}
                     </span>
-                  )}
-                </>
-              )}
-            </motion.button>
-          ))}
+                    {item.badge && (
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        active
+                          ? 'bg-white/20 text-white'
+                          : 'bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300'
+                      }`}>
+                        {item.badge}
+                      </span>
+                    )}
+                  </>
+                )}
+                </motion.div>
+              </Link>
+            );
+          })}
         </nav>
       </div>
 

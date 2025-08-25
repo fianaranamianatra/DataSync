@@ -12,7 +12,7 @@ import {
   Bell
 } from 'lucide-react';
 import { useDashboardStore } from '../../stores/dashboardStore';
-import { useTheme } from '../ui/theme-provider';
+import { useTheme } from '../UI/theme-provider';
 
 const DashboardHeader: React.FC = () => {
   const { toggleSidebar, sidebarCollapsed } = useDashboardStore();
